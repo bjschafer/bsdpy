@@ -61,6 +61,7 @@ from urlparse import urlparse
 
 import socket, struct, fcntl
 import os, fnmatch
+import pwd, grp
 import plistlib
 import logging, optparse
 import signal, errno
@@ -68,7 +69,7 @@ from docopt import docopt
 
 platform = sys.platform
 
-usage = """Usage: bsdpyserver.py [-p <path>] [-r <protocol>] [-i <interface>]
+usage = """Usage: bsdpyserver.py [-p <path>] [-r <protocol>] [-i <interface>] [-u <username>] [-g <groupname>]
 
 Run the BSDP server and handle requests from client. Optional parameters are
 the root path to serve NBIs from, the protocol to serve them with and the
@@ -79,6 +80,8 @@ Options:
  -p --path <path>        The path to serve NBIs from. [default: /nbi]
  -r --proto <protocol>   The protocol to serve NBIs with. [default: http]
  -i --iface <interface>  The interface to bind to. [default: eth0]
+ -u --user <username>    The username to drop to. [default: runs as root]
+ -g --group <groupname>  The groupname to drop to. [default: runs as root]
 """
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s: %(message)s',
@@ -748,6 +751,32 @@ nbiimages = []
 defaultnbi = 0
 hasdefault = False
 
+def drop_privileges(username='nobody', groupname='nogroup'):
+    """
+    Used to drop privileges to a non-root user, for safety reasons.
+    Based (heavily) off of https://stackoverflow.com/a/2699996
+    """
+    if os.getuid() != 0:
+        # not root, so doesn't matter
+        logging.debug("Not running as root already, so no need to drop privileges")
+        return
+
+    # get uid and gid from names
+    uid = pwd.getpwnam(username).pw_uid
+    gid = grp.getgrnam(groupname).gr_gid
+
+    logging.debug("Found uid as %d and gid as %d" % (uid, gid))
+
+    # remove group privileges
+    os.setgroups([])
+
+    # set new uid/gid
+    os.setgid(gid)
+    os.setuid(uid)
+
+    # set umask conservatively
+    old_umask = os.umask(077)
+
 
 def main():
     """Main routine. Do the work."""
@@ -771,6 +800,8 @@ def main():
     # Instantiate a basic pydhcplib DhcpServer class using netopts (listen port,
     #   reply port and listening IP)
     server = Server(netopt)
+
+    drop_privileges(arguments['--user'], arguments['--group'])
 
     # Do a one-time discovery of all available NBIs on the server. NBIs added
     #   after the server was started will not be picked up until after a restart
