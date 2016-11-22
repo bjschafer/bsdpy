@@ -326,8 +326,12 @@ def getNbiOptions(incoming):
                     nbimageinfo['Description']
                 thisnbi['disabledsysids'] = \
                     nbimageinfo['DisabledSystemIdentifiers']
-                thisnbi['dmg'] = \
-                    '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                if nbimageinfo['RootPath'].endswith('sparseimage'):
+                    thisnbi['dmg'] = \
+						/'.join(find('*.dmg.sparseimage', path)[0].split('/')[2:])
+                else:
+					thisnbi['dmg'] = \
+						'/'.join(find('*.dmg', path)[0].split('/')[2:])
 
                 thisnbi['enabledmacaddrs'] = \
                     nbimageinfo.get('EnabledMACAddresses', [])
